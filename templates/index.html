@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Article Categorizer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fas fa-newspaper"></i>
+                <h1>News Categorizer</h1>
+            </div>
+            <p class="tagline">Automatically classify news articles into categories</p>
+        </header>
+
+        <main>
+            <div class="input-section">
+                <label for="newsText">
+                    <i class="fas fa-pen-fancy"></i> Enter News Text
+                </label>
+                <textarea 
+                    id="newsText" 
+                    placeholder="Paste your news article or headline here..."
+                    rows="6"
+                ></textarea>
+                
+                <div class="model-selection">
+                    <label>
+                        <input type="radio" name="modelType" value="bow" checked>
+                        <span class="radio-custom"></span>
+                        <span>Bag of Words (BoW)</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="modelType" value="tfidf">
+                        <span class="radio-custom"></span>
+                        <span>TF-IDF</span>
+                    </label>
+                </div>
+
+                <button id="predictBtn" onclick="predictCategory()">
+                    <i class="fas fa-brain"></i> Categorize News
+                </button>
+            </div>
+
+            <div id="resultSection" class="result-section hidden">
+                <div class="result-card">
+                    <h3><i class="fas fa-chart-pie"></i> Prediction Result</h3>
+                    <div class="category-display">
+                        <span id="predictedCategory" class="category-badge"></span>
+                    </div>
+                </div>
+
+                <div class="probabilities-card">
+                    <h3><i class="fas fa-percentage"></i> Category Probabilities</h3>
+                    <div id="probabilitiesList" class="probabilities-list">
+                    </div>
+                </div>
+            </div>
+
+            <div id="loadingSection" class="loading-section hidden">
+                <div class="spinner"></div>
+                <p>Analyzing text...</p>
+            </div>
+
+            <div id="errorSection" class="error-section hidden">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p id="errorMessage"></p>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by Naive Bayes Classifier | NLP Text Classification</p>
+        </footer>
+    </div>
+
+    <script>
+        const categoryColors = {
+            'entertainment': '#e91e63',
+            'business': '#2196f3',
+            'sport': '#4caf50',
+            'politics': '#ff9800',
+            'tech': '#9c27b0'
+        };
+
+        async function predictCategory() {
+            const text = document.getElementById('newsText').value.trim();
+            const modelType = document.querySelector('input[name="modelType"]:checked').value;
+            
+            document.getElementById('resultSection').classList.add('hidden');
+            document.getElementById('errorSection').classList.add('hidden');
+            
+            if (!text) {
+                showError('Please enter some text to categorize.');
+                return;
+            }
+
+            document.getElementById('loadingSection').classList.remove('hidden');
+            document.getElementById('predictBtn').disabled = true;
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        model_type: modelType
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayResult(data);
+                } else {
+                    showError(data.error || 'An error occurred while processing your request.');
+                }
+            } catch (error) {
+                showError('Failed to connect to server. Please make sure the Flask server is running.');
+            } finally {
+                document.getElementById('loadingSection').classList.add('hidden');
+                document.getElementById('predictBtn').disabled = false;
+            }
+        }
+
+        function displayResult(data) {
+            const predictedCategory = data.prediction;
+            const probabilities = data.probabilities;
+            
+            const categoryBadge = document.getElementById('predictedCategory');
+            categoryBadge.textContent = predictedCategory.charAt(0).toUpperCase() + predictedCategory.slice(1);
+            categoryBadge.style.backgroundColor = getCategoryColor(predictedCategory);
+            
+            const probabilitiesList = document.getElementById('probabilitiesList');
+            probabilitiesList.innerHTML = '';
+            
+            const sortedProbabilities = Object.entries(probabilities)
+                .sort(([,a], [,b]) => b - a);
+            
+            sortedProbabilities.forEach(([category, probability]) => {
+                const percentage = (probability * 100).toFixed(1);
+                const bar = document.createElement('div');
+                bar.className = 'probability-bar-container';
+                bar.innerHTML = `
+                    <div class="probability-label">
+                        <span class="category-name">${category.charAt(0).toUpperCase() + category.slice(1)}</span>
+                        <span class="percentage">${percentage}%</span>
+                    </div>
+                    <div class="probability-bar">
+                        <div class="probability-fill" style="width: ${percentage}%; background-color: ${getCategoryColor(category)}"></div>
+                    </div>
+                `;
+                probabilitiesList.appendChild(bar);
+            });
+            
+            document.getElementById('resultSection').classList.remove('hidden');
+        }
+
+        function getCategoryColor(category) {
+            return categoryColors[category.toLowerCase()] || '#6c757d';
+        }
+
+        function showError(message) {
+            const errorSection = document.getElementById('errorSection');
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorSection.classList.remove('hidden');
+        }
+
+        document.getElementById('newsText').addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                predictCategory();
+            }
+        });
+    </script>
+</body>
+</html>
+
